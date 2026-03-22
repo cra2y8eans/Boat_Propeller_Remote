@@ -2,12 +2,12 @@
 
 #include <Arduino.h>
 
-struct sendToMotor_t {
-  uint16_t speed;
-  bool     data[4] = { }; // 0、左转，1、右转，2、电推，3、功能
-  float    batVoltage;
-};
-extern volatile sendToMotor_t send_to_motor;
+// struct sendToMotor_t {
+//   uint16_t speed;
+//   bool     data[4] = { }; // 0、左转，1、右转，2、电推，3、功能
+//   float    batVoltage;
+// };
+// extern volatile sendToMotor_t send_to_motor;
 
 enum recvFromMotor_e {
   HAND_MODE,    // 手动模式

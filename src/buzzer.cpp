@@ -1,7 +1,7 @@
 #include "buzzer.h"
 #include <Arduino.h>
 
-static const char* TAG = "buzzer";
+static const char* TAG = "蜂鸣器";
 // ===== 硬件配置 =====
 static uint8_t buzzerPin = 18;
 
