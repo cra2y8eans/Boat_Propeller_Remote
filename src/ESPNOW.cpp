@@ -31,10 +31,10 @@ struct sendToMotor_t {
   bool     data[4] = { }; // 0、左转，1、右转，2、电推，3、功能
   float    batVoltage, batPercentage, footPadChipTemp;
 };
-
-static Filters::LowPass  speedFilter(LOW_PASS_ALPHA);
 static sendToMotor_t     sendToMotor;
 volatile recvFromMotor_e recv_from_motor;
+
+static Filters::LowPass speedFilter(LOW_PASS_ALPHA);
 
 static void OnDataRecv(const uint8_t* mac, const uint8_t* incomingData, int len) {
   memcpy((void*)&recv_from_motor, incomingData, sizeof(recv_from_motor));
@@ -67,6 +67,7 @@ void connection_state_check(void* pvParameters) {
   TickType_t       xLastWakeTime = xTaskGetTickCount();
   const TickType_t xPeriod       = pdMS_TO_TICKS(200); // 延时 100ms，频率 = 1000 / 100 = 10 Hz，即每秒执行 10 次。
   uint32_t         lastCheck     = 0;
+  static bool      last_state    = false;
   while (1) {
     // 每 1000 次循环或每 5 秒检查一次栈水位
     if (millis() - lastCheck > 5000) {
@@ -76,7 +77,13 @@ void connection_state_check(void* pvParameters) {
     }
     unsigned long currentTime = millis();
     isMotorOnline             = (currentTime - lastRecvFromMotor <= RECV_TIMEOUT);
-    if (!isMotorOnline) ESP_LOGE(TAG, "掉线！请检查网络连接！");
+    if (isMotorOnline != last_state) {
+      last_state = isMotorOnline;
+      if (!isMotorOnline) {
+        buzzer(3, SHORT_BEEP_DURATION, SHORT_BEEP_INTERVAL);
+        ESP_LOGE(TAG, "掉线！请检查网络连接！");
+      }
+    }
     vTaskDelayUntil(&xLastWakeTime, xPeriod);
   }
 }

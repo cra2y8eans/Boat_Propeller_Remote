@@ -7,6 +7,7 @@
 
 #define K_OHM 1000
 #define BATTERY_READING_INTERVAL 3 * 60 * 1000 // 采样间隔 3分钟*60秒*1000毫秒
+#define BATTERY_ALERT_INTERVAL 3 * 10 * 1000   // 报警间隔 3分钟*10秒*1000毫秒
 
 static const char*   TAG           = "电池";
 static const uint8_t batPin        = 39;
@@ -19,9 +20,11 @@ volatile float       batPercentage = 0.0;
 
 volatile BatteryState_e batteryState = FULL;
 
-Filters::LowPass filter(0.3f);
+Filters::LowPass batFilter(0.3f);
 
 void batteryInit() {
+  analogReadResolution(12);
+  bateryReading();
 }
 
 /**  电量读取
@@ -31,9 +34,10 @@ void batteryInit() {
  * @param     batPercentage: 电量百分比
  * @param     batVoltage: 电压值
  */
-void bateryReading() {
-  batVoltage    = (filter.update(analogReadMilliVolts(batPin))) * (R1 + R2) / R2;
-  batPercentage = (batVoltage - VMIN) / (VMAX - VMIN) * 100;
+float bateryReading() {
+  batVoltage    = (batFilter.update(analogReadMilliVolts(batPin))) * (R1 + R2) / R2;
+  batPercentage = (batVoltage - VMIN) / (VMAX - VMIN) * 100.f;
+  batPercentage = constrain(batPercentage, 0.0f, 100.0f); // 确保不为负数
   if (batPercentage >= 80) {
     batteryState = FULL;
   } else if (batPercentage >= 60) {
@@ -43,16 +47,24 @@ void bateryReading() {
   } else if (batPercentage >= 20) {
     batteryState = DEPLETED;
   } else {
-    batteryState = CRITICAL;
-    ESP_LOGE(TAG, "电量过低，请及时充电");
-    buzzer(3, SHORT_BEEP_DURATION, SHORT_BEEP_INTERVAL);
+    batteryState                       = CRITICAL;
+    static unsigned long lastAlertTime = 0;
+    if (batteryState == CRITICAL && (millis() - lastAlertTime > BATTERY_ALERT_INTERVAL)) {
+      ESP_LOGE(TAG, "电量过低，请及时充电");
+      buzzer(3, SHORT_BEEP_DURATION, SHORT_BEEP_INTERVAL);
+      lastAlertTime = millis();
+    }
   }
+  return batPercentage / 100.f;
 }
 
 //  电量读取任务
 void batteryCheck(void* pvParameter) {
   while (1) {
-    bateryReading();
-    vTaskDelay(batPercentage * BATTERY_READING_INTERVAL / portTICK_PERIOD_MS); // 电量越低读取越频繁
+    float batteryLevel = bateryReading();
+    float interval     = batteryLevel * BATTERY_READING_INTERVAL;
+    if (interval > BATTERY_READING_INTERVAL) interval = BATTERY_READING_INTERVAL;
+    if (interval < 1000) interval = 1000;
+    vTaskDelay(interval / portTICK_PERIOD_MS); // 电量越低读取越频繁
   }
 }
