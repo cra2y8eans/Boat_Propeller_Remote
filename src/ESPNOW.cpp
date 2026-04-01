@@ -47,6 +47,10 @@ static void OnDataSent(const uint8_t* mac_addr, esp_now_send_status_t status) {
 }
 
 void esp_now_setup() {
+  pinMode(turnRightPin, INPUT_PULLUP);
+  pinMode(turnLeftPin, INPUT_PULLUP);
+  pinMode(throttlePin, INPUT_PULLUP);
+
   WiFi.mode(WIFI_STA);
   WiFi.disconnect();
   if (esp_now_init() != ESP_OK) {
@@ -99,10 +103,10 @@ void sendData(void* pvParameters) {
       lastCheck = millis();
     }
     sendToMotor.speed   = speedFilter.update(analogRead(speedPin));
-    sendToMotor.data[0] = digitalRead(turnLeftPin);
-    sendToMotor.data[1] = digitalRead(turnRightPin);
-    sendToMotor.data[2] = digitalRead(throttlePin);
-    sendToMotor.data[3] = isBtnLongPressed;
+    sendToMotor.data[0] = !digitalRead(turnLeftPin);
+    sendToMotor.data[1] = !digitalRead(turnRightPin);
+    sendToMotor.data[2] = !digitalRead(throttlePin);
+    sendToMotor.data[3] = isBtnShortPressed;
     taskENTER_CRITICAL(&esp_now_Mux);
     sendToMotor.batVoltage      = batVoltage;
     sendToMotor.batPercentage   = batPercentage;

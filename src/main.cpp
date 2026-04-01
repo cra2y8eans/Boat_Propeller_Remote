@@ -9,6 +9,7 @@
 #include <freertos/task.h>
 
 void setup() {
+  Serial.begin(115200);
   esp_now_setup();
   ledInit();
   buzzerInit();

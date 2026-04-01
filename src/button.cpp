@@ -24,7 +24,7 @@ static void functionButtonLongPressed() {
 }
 
 void buttonInit() {
-  functionButton.setup(functionButtonPin, INPUT_PULLDOWN);
+  functionButton.setup(functionButtonPin, INPUT_PULLUP);
   functionButton.attachClick(functionButtonShortPressed);
   functionButton.attachLongPressStart(functionButtonLongPressed);
   functionButton.setPressMs(LONG_PRESS_DEBOUNCE_MS);
