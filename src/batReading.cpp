@@ -24,7 +24,6 @@ Filters::LowPass batFilter(0.3f);
 
 void batteryInit() {
   analogReadResolution(12);
-  bateryReading();
 }
 
 /**  电量读取
@@ -34,7 +33,7 @@ void batteryInit() {
  * @param     batPercentage: 电量百分比
  * @param     batVoltage: 电压值
  */
-float bateryReading() {
+float batteryReading() {
   batVoltage    = (batFilter.update(analogReadMilliVolts(batPin))) * (R1 + R2) / R2;
   batPercentage = (batVoltage - VMIN) / (VMAX - VMIN) * 100.f;
   batPercentage = constrain(batPercentage, 0.0f, 100.0f); // 确保不为负数
@@ -61,7 +60,7 @@ float bateryReading() {
 //  电量读取任务
 void batteryCheck(void* pvParameter) {
   while (1) {
-    float batteryLevel = bateryReading();
+    float batteryLevel = batteryReading();
     float interval     = batteryLevel * BATTERY_READING_INTERVAL;
     if (interval > BATTERY_READING_INTERVAL) interval = BATTERY_READING_INTERVAL;
     if (interval < 1000) interval = 1000;
