@@ -18,7 +18,7 @@ static portMUX_TYPE esp_now_Mux = portMUX_INITIALIZER_UNLOCKED;
 esp_now_peer_info_t Remote;
 
 static const char*            TAG               = "ESPNOW";
-static const uint8_t          motorMacAddr[6]   = { 0xdc, 0xda, 0x0c, 0x74, 0x8c, 0x98 };
+static const uint8_t          motorMacAddr[6]   = { 0xd8, 0x85, 0xac, 0xa0, 0x49, 0xd8 };
 static const uint8_t          speedPin          = 36;
 static const uint8_t          turnRightPin      = 19;
 static const uint8_t          turnLeftPin       = 32;
