@@ -53,6 +53,7 @@ void esp_now_setup() {
 
   WiFi.mode(WIFI_STA);
   WiFi.disconnect();
+  WiFi.setTxPower(WIFI_POWER_8_5dBm); // 设置较低的发射功率以节省电量
   if (esp_now_init() != ESP_OK) {
     ESP_LOGE(TAG, "ESP NOW 初始化失败");
     buzzer(3, SHORT_BEEP_DURATION, SHORT_BEEP_INTERVAL);
