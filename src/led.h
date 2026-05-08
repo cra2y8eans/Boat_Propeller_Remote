@@ -1,6 +1,5 @@
 #pragma once
 
-#include <Adafruit_NeoPixel.h>
 #include <Arduino.h>
 
 // ===== 常量定义 =====

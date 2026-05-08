@@ -2,6 +2,7 @@
 #include "ESPNOW.h"
 #include "batReading.h"
 #include "button.h"
+#include <Adafruit_NeoPixel.h>
 #include <esp_log.h>
 
 #define MAX_BRIGHTNESS 255
