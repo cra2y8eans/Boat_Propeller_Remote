@@ -11,13 +11,18 @@
 #define BATTERY_LED_INTERVAL 10000 // 指示灯休眠间隔, 单位: 毫秒
 
 static const char*       TAG        = "LED";
-static const uint8_t     WS2812_PIN = 17;
-static Adafruit_NeoPixel ws2812(1, WS2812_PIN, NEO_GRB + NEO_KHZ800);
+static const uint8_t     sysRGB_pin = 18;
+static const uint8_t     batRGB_pin = 19;
+static Adafruit_NeoPixel sysRGB(1, sysRGB_pin, NEO_GRB + NEO_KHZ800);
+static Adafruit_NeoPixel batLED(1, batRGB_pin, NEO_GRB + NEO_KHZ800);
 
 void ledInit() {
-  ws2812.begin();
-  ws2812.setBrightness(STANDARD_BRIGHTNESS);
-  ws2812.clear();
+  sysRGB.begin();
+  sysRGB.setBrightness(STANDARD_BRIGHTNESS);
+  sysRGB.clear();
+  batLED.begin();
+  batLED.setBrightness(STANDARD_BRIGHTNESS);
+  batLED.clear();
 }
 
 void ledTask(void* pvParameters) {
@@ -26,38 +31,38 @@ void ledTask(void* pvParameters) {
     if (isBtnLongPressed) {
       unsigned long currentTime = millis();
       if (currentTime - lastBatteryLEDTime < BATTERY_LED_INTERVAL) {
-        ws2812.clear();
+        sysRGB.clear();
         switch (batteryState) {
         case FULL:
-          ws2812.setPixelColor(0, COLOR_CYAN);
+          sysRGB.setPixelColor(0, COLOR_CYAN);
           break;
         case DECENT:
-          ws2812.setPixelColor(0, COLOR_GREEN);
+          sysRGB.setPixelColor(0, COLOR_GREEN);
           break;
         case MODERATE:
-          ws2812.setPixelColor(0, COLOR_YELLOW);
+          sysRGB.setPixelColor(0, COLOR_YELLOW);
           break;
         case DEPLETED:
-          ws2812.setPixelColor(0, COLOR_RED);
+          sysRGB.setPixelColor(0, COLOR_RED);
           break;
         default:
           break;
         }
       } else {
-        ws2812.clear();
+        sysRGB.clear();
         lastBatteryLEDTime = currentTime;
         isBtnLongPressed   = false;
       }
     } else {
       if (isMotorOnline) {
-        ws2812.clear();
-        ws2812.setPixelColor(0, COLOR_BLUE);
+        sysRGB.clear();
+        sysRGB.setPixelColor(0, COLOR_BLUE);
       } else {
-        ws2812.clear();
-        ws2812.setPixelColor(0, COLOR_RED);
+        sysRGB.clear();
+        sysRGB.setPixelColor(0, COLOR_RED);
       }
     }
-    ws2812.show();
+    sysRGB.show();
     vTaskDelay(pdMS_TO_TICKS(300));
   }
 }

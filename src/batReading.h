@@ -12,7 +12,7 @@ enum BatteryState_e {
 extern volatile BatteryState_e batteryState;
 
 extern volatile float batPercentage, batVoltage;
-
+extern volatile bool  isCharging, isBatteryFull;
 
 void batteryInit();
 void batteryCheck(void* pvParameter);

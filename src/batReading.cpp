@@ -10,7 +10,7 @@
 #define BATTERY_ALERT_INTERVAL 3 * 10 * 1000   // 报警间隔 3分钟*10秒*1000毫秒
 
 static const char*   TAG           = "电池";
-static const uint8_t batPin        = 39;
+static const uint8_t batPin        = 1;
 static const float   R1            = 9.9 * K_OHM;
 static const float   R2            = 9.9 * K_OHM;
 static const float   VMAX          = 4.2 * K_OHM;

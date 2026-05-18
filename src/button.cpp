@@ -5,7 +5,7 @@
 
 #define LONG_PRESS_DEBOUNCE_MS 800
 static const char*   TAG               = "按钮";
-static const uint8_t functionButtonPin = 33;
+static const uint8_t functionButtonPin = 7;
 volatile bool        isBtnShortPressed = false;
 volatile bool        isBtnLongPressed  = false;
 

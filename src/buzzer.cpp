@@ -3,7 +3,7 @@
 
 static const char* TAG = "蜂鸣器";
 // ===== 硬件配置 =====
-static uint8_t buzzerPin = 18;
+static uint8_t buzzerPin = 10;
 
 // ===== 状态机定义 =====
 
