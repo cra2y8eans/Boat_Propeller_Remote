@@ -18,7 +18,7 @@ static void functionButtonShortPressed() {
 }
 
 static void functionButtonLongPressed() {
-  isBtnLongPressed = true;
+  isBtnLongPressed = !isBtnLongPressed;
   ESP_LOGI(TAG, "长按");
   buzzer(1, LONG_BEEP_DURATION, LONG_BEEP_INTERVAL);
 }

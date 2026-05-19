@@ -2,8 +2,10 @@
 #include "Filters.h"
 #include "buzzer.h"
 #include "esp_log.h"
+#include <button.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
+#include <led.h>
 
 #define K_OHM 1000
 #define BATTERY_READING_INTERVAL 3 * 60 * 1000 // 采样间隔 3分钟*60秒*1000毫秒
@@ -17,8 +19,6 @@ static const float   VMAX          = 4.2 * K_OHM;
 static const float   VMIN          = 3.2 * K_OHM;
 volatile float       batVoltage    = 0.0;
 volatile float       batPercentage = 0.0;
-
-volatile BatteryState_e batteryState = FULL;
 
 Filters::LowPass batFilter(0.3f);
 
@@ -37,33 +37,29 @@ float batteryReading() {
   batVoltage    = (batFilter.update(analogReadMilliVolts(batPin))) * (R1 + R2) / R2;
   batPercentage = (batVoltage - VMIN) / (VMAX - VMIN) * 100.f;
   batPercentage = constrain(batPercentage, 0.0f, 100.0f); // 确保不为负数
-  if (batPercentage >= 80) {
-    batteryState = FULL;
-  } else if (batPercentage >= 60) {
-    batteryState = DECENT;
-  } else if (batPercentage >= 40) {
-    batteryState = MODERATE;
-  } else if (batPercentage >= 20) {
-    batteryState = DEPLETED;
-  } else {
-    batteryState                       = CRITICAL;
-    static unsigned long lastAlertTime = 0;
-    if (batteryState == CRITICAL && (millis() - lastAlertTime > BATTERY_ALERT_INTERVAL)) {
-      ESP_LOGE(TAG, "电量过低，请及时充电");
-      buzzer(3, SHORT_BEEP_DURATION, SHORT_BEEP_INTERVAL);
-      lastAlertTime = millis();
-    }
-  }
   return batPercentage / 100.f;
 }
 
 //  电量读取任务
 void batteryCheck(void* pvParameter) {
   while (1) {
-    float batteryLevel = batteryReading();
-    float interval     = batteryLevel * BATTERY_READING_INTERVAL;
+    // 电量指示
+    float    batteryLevel = batteryReading();
+    uint32_t color        = getBatteryColor(batPercentage);
+    ledSetMode(batRGB, LED_ON, color, 0, 0);
+    // 低电量报警
+    if (batPercentage <= 10.0f) {
+      static unsigned long lastAlertTime = 0;
+      if (!isBtnLongPressed && millis() - lastAlertTime > BATTERY_ALERT_INTERVAL) { // isBtnLongPressed初始值为false，低电量报警默认开启
+        ESP_LOGE(TAG, "电量过低，请及时充电");
+        buzzer(3, SHORT_BEEP_DURATION, SHORT_BEEP_INTERVAL);
+        lastAlertTime = millis();
+      }
+    }
+    // 根据电量动态调整读取频率，电量越低读取越频繁，最高每秒一次，最低每10秒一次
+    float interval = batteryLevel * BATTERY_READING_INTERVAL;
     if (interval > BATTERY_READING_INTERVAL) interval = BATTERY_READING_INTERVAL;
     if (interval < 1000) interval = 1000;
-    vTaskDelay(interval / portTICK_PERIOD_MS); // 电量越低读取越频繁
+    vTaskDelay(interval / portTICK_PERIOD_MS);
   }
 }
