@@ -15,7 +15,7 @@
 // 定义临界区变量
 static portMUX_TYPE esp_now_Mux = portMUX_INITIALIZER_UNLOCKED;
 
-esp_now_peer_info_t Remote;
+static esp_now_peer_info_t Remote;
 
 static const char*            TAG               = "ESPNOW";
 static const uint8_t          motorMacAddr[6]   = { 0xd8, 0x85, 0xac, 0xa0, 0x49, 0xd8 };
@@ -28,10 +28,11 @@ volatile bool                 isMotorOnline     = false;
 
 struct sendToMotor_t {
   uint16_t speed;
-  bool     data[4] = { }; // 0、左转，1、右转，2、电推，3、功能
+  bool     data[6] = { }; // 0、左转，1、右转，2、电推，3、功能，4、正在充电，5、电池已满
   float    batVoltage, batPercentage, footPadChipTemp;
 };
 static sendToMotor_t     sendToMotor;
+
 volatile recvFromMotor_e recv_from_motor;
 
 static Filters::LowPass speedFilter(LOW_PASS_ALPHA);
@@ -53,7 +54,7 @@ void esp_now_setup() {
 
   WiFi.mode(WIFI_STA);
   WiFi.disconnect();
-  WiFi.setTxPower(WIFI_POWER_8_5dBm); // 设置较低的发射功率以节省电量
+  WiFi.setTxPower(WIFI_POWER_8_5dBm); // 设置较低的发射功率以降低MCU功耗和电磁干扰
   if (esp_now_init() != ESP_OK) {
     ESP_LOGE(TAG, "ESP NOW 初始化失败");
     buzzer(3, SHORT_BEEP_DURATION, SHORT_BEEP_INTERVAL);
@@ -108,6 +109,8 @@ void sendData(void* pvParameters) {
     sendToMotor.data[1] = !digitalRead(turnRightPin);
     sendToMotor.data[2] = !digitalRead(throttlePin);
     sendToMotor.data[3] = isBtnShortPressed;
+    sendToMotor.data[4] = isCharging;
+    sendToMotor.data[5] = isBatteryFull;
     taskENTER_CRITICAL(&esp_now_Mux);
     sendToMotor.batVoltage      = batVoltage;
     sendToMotor.batPercentage   = batPercentage;

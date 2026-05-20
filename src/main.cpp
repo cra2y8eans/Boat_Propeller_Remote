@@ -17,7 +17,7 @@ void setup() {
   batteryInit();
 
   xTaskCreatePinnedToCore(buzzerUpdate, "buzzerUpdate", 1024 * 10, NULL, 1, NULL, 1);
-  xTaskCreatePinnedToCore(ledTask, "ledUpdate", 1024 * 10, NULL, 1, NULL, 1);
+  xTaskCreatePinnedToCore(ledUpdate, "ledUpdate", 1024 * 10, NULL, 1, NULL, 1);
   xTaskCreatePinnedToCore(sendData, "sendData", 1024 * 10, NULL, 3, NULL, 0);
   xTaskCreatePinnedToCore(connection_state_check, "esp_now_connection_check", 1024 * 10, NULL, 2, NULL, 0);
   xTaskCreatePinnedToCore(buttonTask, "buttonTask", 1024 * 10, NULL, 1, NULL, 1);

@@ -8,12 +8,11 @@
 #define MIN_BRIGHTNESS 0
 #define STANDARD_BRIGHTNESS 100
 
-static const char*       TAG        = "LED";
-static const uint8_t     sysRGB_pin = 18;
-static const uint8_t     batRGB_pin = 19;
-static Adafruit_NeoPixel sysRGB(1, sysRGB_pin, NEO_GRB + NEO_KHZ800);
-static Adafruit_NeoPixel batRGB(1, batRGB_pin, NEO_GRB + NEO_KHZ800);
-
+static const char*   TAG        = "LED";
+static const uint8_t sysRGB_pin = 18;
+static const uint8_t batRGB_pin = 19;
+Adafruit_NeoPixel    sysRGB(1, sysRGB_pin, NEO_GRB + NEO_KHZ800);
+Adafruit_NeoPixel    batRGB(1, batRGB_pin, NEO_GRB + NEO_KHZ800);
 
 // ===== LED状态机 =====
 typedef enum {
@@ -43,41 +42,41 @@ void ledInit() {
 }
 
 uint32_t getBatteryColor(float percent) {
-    // 限制范围
-    if (percent < 0) percent = 0;
-    if (percent > 100) percent = 100;
+  // 限制范围
+  if (percent < 0) percent = 0;
+  if (percent > 100) percent = 100;
 
-    // 定义关键颜色点 (百分比, R, G, B)
-    struct ColorPoint {
-        float pct;
-        uint8_t r, g, b;
-    };
-    const ColorPoint points[] = {
-        {100.0, 0,   0,   255}, // 蓝
-        {80.0,  0,   255, 255}, // 青
-        {60.0,  0,   255, 0  }, // 绿
-        {40.0,  255, 255, 0  }, // 黄
-        {20.0,  255, 165, 0  }, // 橙
-        {10.0,  255, 0,   0  }  // 红
-    };
-    const int numPoints = sizeof(points) / sizeof(points[0]);
+  // 定义关键颜色点 (百分比, R, G, B)
+  struct ColorPoint {
+    float   pct;
+    uint8_t r, g, b;
+  };
+  const ColorPoint points[] = {
+    { 100.0, 0, 0, 255 },  // 蓝
+    { 80.0, 0, 255, 255 }, // 青
+    { 60.0, 0, 255, 0 },   // 绿
+    { 40.0, 255, 255, 0 }, // 黄
+    { 20.0, 255, 165, 0 }, // 橙
+    { 10.0, 255, 0, 0 }    // 红
+  };
+  const int numPoints = sizeof(points) / sizeof(points[0]);
 
-    // 低于最低点（10%）直接返回红色
-    if (percent <= points[numPoints-1].pct) {
-        return (0xFF << 16) | (0x00 << 8) | 0x00;
+  // 低于最低点（10%）直接返回红色
+  if (percent <= points[numPoints - 1].pct) {
+    return (0xFF << 16) | (0x00 << 8) | 0x00;
+  }
+
+  // 查找所在区间并线性插值
+  for (int i = 0; i < numPoints - 1; i++) {
+    if (percent >= points[i + 1].pct && percent <= points[i].pct) {
+      float   t = (percent - points[i + 1].pct) / (points[i].pct - points[i + 1].pct);
+      uint8_t r = points[i + 1].r + t * (points[i].r - points[i + 1].r);
+      uint8_t g = points[i + 1].g + t * (points[i].g - points[i + 1].g);
+      uint8_t b = points[i + 1].b + t * (points[i].b - points[i + 1].b);
+      return ((uint32_t)r << 16) | ((uint32_t)g << 8) | b;
     }
-
-    // 查找所在区间并线性插值
-    for (int i = 0; i < numPoints - 1; i++) {
-        if (percent >= points[i+1].pct && percent <= points[i].pct) {
-            float t = (percent - points[i+1].pct) / (points[i].pct - points[i+1].pct);
-            uint8_t r = points[i+1].r + t * (points[i].r - points[i+1].r);
-            uint8_t g = points[i+1].g + t * (points[i].g - points[i+1].g);
-            uint8_t b = points[i+1].b + t * (points[i].b - points[i+1].b);
-            return ((uint32_t)r << 16) | ((uint32_t)g << 8) | b;
-        }
-    }
-    return COLOR_OFF; // fallback
+  }
+  return COLOR_OFF; // fallback
 }
 
 /**
