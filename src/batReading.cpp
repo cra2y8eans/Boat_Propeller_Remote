@@ -86,6 +86,15 @@ BatteryState_e getBatteryState() {
 
 //  电量读取任务
 void batteryCheck(void* pvParameter) {
+  // 初始状态读取和LED设置
+  isCharging    = digitalRead(chargePin) == LOW;
+  isBatteryFull = digitalRead(standbyPin) == LOW;
+  batteryState  = getBatteryState();
+  if (isCharging) {
+    ledSetMode(batRGB, LED_ON, COLOR_RED, 0, 0);
+  } else if (isBatteryFull) {
+    ledSetMode(batRGB, LED_ON, COLOR_GREEN, 0, 0);
+  }
   while (1) {
     taskENTER_CRITICAL(&batteryMux);
     batteryState = getBatteryState();
@@ -142,7 +151,4 @@ void batteryInit() {
   pinMode(standbyPin, INPUT); // 已外部上拉
   attachInterrupt(digitalPinToInterrupt(chargePin), chargeStateChanged_ISR, CHANGE);
   attachInterrupt(digitalPinToInterrupt(standbyPin), fullStateChanged_ISR, CHANGE);
-  isCharging    = digitalRead(chargePin) == LOW;
-  isBatteryFull = digitalRead(standbyPin) == LOW;
-  batteryState  = getBatteryState();
 }
