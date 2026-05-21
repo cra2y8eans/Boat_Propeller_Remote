@@ -22,9 +22,8 @@ volatile float       batPercentage = 0.0;
 
 Filters::LowPass batFilter(0.3f);
 
-TaskHandle_t         chargeTaskHandle = NULL;
-static const uint8_t chargePin        = 2;      // 充电状态检测引脚，需外部上拉
-static const uint8_t standbyPin       = 8;      // 充满状态检测引脚，需外部上拉
+static const uint8_t chargePin  = 2;            // 充电状态检测引脚，需外部上拉
+static const uint8_t standbyPin = 8;            // 充满状态检测引脚，需外部上拉
 volatile bool        isCharging, isBatteryFull; // 充电状态和电池满状态标志位
 
 enum BatteryState_e {
@@ -33,15 +32,32 @@ enum BatteryState_e {
   BATTERY_STATE_FULL,
 };
 static BatteryState_e batteryState = BATTERY_STATE_IDLE;
+static portMUX_TYPE   batteryMux   = portMUX_INITIALIZER_UNLOCKED;
 
-// 定义临界区变量
-static portMUX_TYPE batteryMux = portMUX_INITIALIZER_UNLOCKED;
+TaskHandle_t batteryTaskHandle = NULL;
 
-void IRAM_ATTR chargeStatus_ISR() {
-  taskENTER_CRITICAL(&batteryMux);
-  isCharging    = digitalRead(chargePin) == LOW;  // 充电状态引脚为低电平表示正在充电
-  isBatteryFull = digitalRead(standbyPin) == LOW; // 充满状态引脚为低电平表示电池已充满
-  taskEXIT_CRITICAL(&batteryMux);
+void IRAM_ATTR chargeStateChanged_ISR() {
+  BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+  isCharging                          = digitalRead(chargePin) == LOW;
+  vTaskNotifyGiveFromISR(batteryTaskHandle, &xHigherPriorityTaskWoken); // 发送通知给任务，不携带任何值，并传入 xHigherPriorityTaskWoken 来指示是否需要切换任务
+  if (xHigherPriorityTaskWoken == pdTRUE) {
+    portYIELD_FROM_ISR(); // 切换任务。注意与ESP32的写法有所不同
+  }
+}
+
+// void IRAM_ATTR chargeStateChanged_ISR() {
+//     isCharging = digitalRead(chargePin) == LOW;
+//     vTaskNotifyGiveFromISR(batteryTaskHandle, NULL);
+//     portYIELD_FROM_ISR();
+// }
+
+void IRAM_ATTR fullStateChanged_ISR() {
+  BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+  isBatteryFull                       = digitalRead(standbyPin) == LOW;
+  vTaskNotifyGiveFromISR(batteryTaskHandle, &xHigherPriorityTaskWoken);
+  if (xHigherPriorityTaskWoken == pdTRUE) {
+    portYIELD_FROM_ISR();
+  }
 }
 
 /**  电量读取
@@ -70,33 +86,12 @@ BatteryState_e getBatteryState() {
 
 //  电量读取任务
 void batteryCheck(void* pvParameter) {
-  static bool isBatteryChargeBeep = false;
-  static bool isBatteryFullBeep   = false;
   while (1) {
+    taskENTER_CRITICAL(&batteryMux);
     batteryState = getBatteryState();
-    switch (batteryState) {
-    case BATTERY_STATE_CHARGING: {
-      float    batteryLevel = batteryReading();
-      uint32_t color        = getBatteryColor(batPercentage);
-      ledSetMode(batRGB, LED_ON, color, 0, 0);
-      if (!isBatteryChargeBeep) {
-        buzzer(1, SHORT_BEEP_DURATION, SHORT_BEEP_INTERVAL); // 开始充电时鸣叫一次
-        isBatteryChargeBeep = true;
-      }
-      ESP_LOGI(TAG, "正在充电，电量: %.2f%%, 电压: %.2fV", batPercentage, batVoltage);
-      vTaskDelay(pdMS_TO_TICKS(2000)); // 充电状态下每2秒更新一次电量显示
-      break;
-    }
-    case BATTERY_STATE_FULL:
-      ledSetMode(batRGB, LED_ON, COLOR_GREEN, 0, 0);
-      if (!isBatteryFullBeep) {
-        buzzer(3, SHORT_BEEP_DURATION, SHORT_BEEP_INTERVAL); // 充满时鸣叫两次
-        isBatteryFullBeep = true;
-      }
-      ESP_LOGI(TAG, "电池已充满，电量: %.2f%%, 电压: %.2fV", batPercentage, batVoltage);
-      break;
-    case BATTERY_STATE_IDLE: {
-      // 电量指示，颜色根据电量百分比动态调整
+    taskEXIT_CRITICAL(&batteryMux);
+    // 电池空闲状态
+    if (batteryState == BATTERY_STATE_IDLE) {
       float    batteryLevel = batteryReading();
       uint32_t color        = getBatteryColor(batPercentage);
       ledSetMode(batRGB, LED_ON, color, 0, 0);
@@ -114,9 +109,33 @@ void batteryCheck(void* pvParameter) {
       if (interval > BATTERY_READING_INTERVAL) interval = BATTERY_READING_INTERVAL;
       if (interval < 1000) interval = 1000;
       vTaskDelay(interval / portTICK_PERIOD_MS);
+    } else {
+      vTaskDelay(pdMS_TO_TICKS(1000)); // 充电或充满状态时每秒检查一次状态
+    }
+  }
+}
+
+void batteryChargeTask(void* pvParameter) {
+  while (1) {
+    ulTaskNotifyTake(pdTRUE, portMAX_DELAY); // 等待充电状态改变的通知
+    taskENTER_CRITICAL(&batteryMux);
+    batteryState = getBatteryState();
+    taskEXIT_CRITICAL(&batteryMux);
+    switch (batteryState) {
+    case BATTERY_STATE_CHARGING: {
+      float batteryLevel = batteryReading();
+      ledSetMode(batRGB, LED_ON, COLOR_RED, 0, 0); // 充电时亮红灯
+      buzzer(1, SHORT_BEEP_DURATION, SHORT_BEEP_INTERVAL);
+      ESP_LOGI(TAG, "正在充电，电量: %.2f%%, 电压: %.2fV", batPercentage, batVoltage);
       break;
     }
-
+    case BATTERY_STATE_FULL: {
+      float batteryLevel = batteryReading();
+      ledSetMode(batRGB, LED_ON, COLOR_GREEN, 0, 0); // 充满，亮绿灯
+      buzzer(3, SHORT_BEEP_DURATION, SHORT_BEEP_INTERVAL);
+      ESP_LOGI(TAG, "电池已充满，电量: %.2f%%, 电压: %.2fV", batPercentage, batVoltage);
+      break;
+    }
     default:
       break;
     }
@@ -127,9 +146,9 @@ void batteryInit() {
   analogReadResolution(12);
   pinMode(chargePin, INPUT);  // 已外部上拉
   pinMode(standbyPin, INPUT); // 已外部上拉
+  attachInterrupt(digitalPinToInterrupt(chargePin), chargeStateChanged_ISR, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(standbyPin), fullStateChanged_ISR, CHANGE);
   isCharging    = digitalRead(chargePin) == LOW;
   isBatteryFull = digitalRead(standbyPin) == LOW;
-  attachInterrupt(digitalPinToInterrupt(chargePin), chargeStatus_ISR, CHANGE);
-  attachInterrupt(digitalPinToInterrupt(standbyPin), chargeStatus_ISR, CHANGE);
-  batteryState = getBatteryState();
+  batteryState  = getBatteryState();
 }

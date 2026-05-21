@@ -14,6 +14,7 @@ void setup() {
   ledInit();
   buzzerInit();
   buttonInit();
+  xTaskCreatePinnedToCore(batteryChargeTask, "batteryChargeTask", 1024 * 10, NULL, 3, &batteryTaskHandle, 1);
   batteryInit();
 
   xTaskCreatePinnedToCore(buzzerUpdate, "buzzerUpdate", 1024 * 10, NULL, 1, NULL, 1);

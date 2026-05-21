@@ -31,7 +31,7 @@ struct sendToMotor_t {
   bool     data[6] = { }; // 0、左转，1、右转，2、电推，3、功能，4、正在充电，5、电池已满
   float    batVoltage, batPercentage, footPadChipTemp;
 };
-static sendToMotor_t     sendToMotor;
+static sendToMotor_t sendToMotor;
 
 volatile recvFromMotor_e recv_from_motor;
 
@@ -72,15 +72,8 @@ void esp_now_setup() {
 void connection_state_check(void* pvParameters) {
   TickType_t       xLastWakeTime = xTaskGetTickCount();
   const TickType_t xPeriod       = pdMS_TO_TICKS(200); // 延时 100ms，频率 = 1000 / 100 = 10 Hz，即每秒执行 10 次。
-  uint32_t         lastCheck     = 0;
   static bool      last_state    = false;
   while (1) {
-    // 每 1000 次循环或每 5 秒检查一次栈水位
-    if (millis() - lastCheck > 5000) {
-      UBaseType_t stackHighWater = uxTaskGetStackHighWaterMark(NULL);
-      ESP_LOGI(TAG, "Stack left: %d words", stackHighWater);
-      lastCheck = millis();
-    }
     unsigned long currentTime = millis();
     isMotorOnline             = (currentTime - lastRecvFromMotor <= RECV_TIMEOUT);
     if (isMotorOnline != last_state) {
@@ -97,13 +90,7 @@ void connection_state_check(void* pvParameters) {
 void sendData(void* pvParameters) {
   TickType_t       xLastWakeTime = xTaskGetTickCount();
   const TickType_t xPeriod       = pdMS_TO_TICKS(20); // 延时 20ms，频率 = 1000 / 20 = 50 Hz，即每秒执行 50 次。
-  uint32_t         lastCheck     = 0;
-  while (1) { // 每 1000 次循环或每 5 秒检查一次栈水位
-    if (millis() - lastCheck > 5000) {
-      UBaseType_t stackHighWater = uxTaskGetStackHighWaterMark(NULL);
-      ESP_LOGI(TAG, "Stack left: %d words", stackHighWater);
-      lastCheck = millis();
-    }
+  while (1) {                                         // 每 1000 次循环或每 5 秒检查一次栈水位
     sendToMotor.speed   = speedFilter.update(analogRead(speedPin));
     sendToMotor.data[0] = !digitalRead(turnLeftPin);
     sendToMotor.data[1] = !digitalRead(turnRightPin);
