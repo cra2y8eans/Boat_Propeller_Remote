@@ -87,6 +87,31 @@ BatteryState_e getBatteryState() {
 //  电量读取任务
 void batteryCheck(void* pvParameter) {
   while (1) {
+    // taskENTER_CRITICAL(&batteryMux);
+    // batteryState = getBatteryState();
+    // taskEXIT_CRITICAL(&batteryMux);
+    // // 电池空闲状态
+    // if (batteryState == BATTERY_STATE_IDLE) {
+    //   float    batteryLevel = batteryReading();
+    //   uint32_t color        = getBatteryColor(batPercentage);
+    //   ledSetMode(batRGB, LED_ON, color, 0, 0);
+    //   // 低电量报警
+    //   if (batPercentage <= 10.0f) {
+    //     static unsigned long lastAlertTime = 0;
+    //     if (!isBtnLongPressed && millis() - lastAlertTime > BATTERY_ALERT_INTERVAL) { // isBtnLongPressed初始值为false，低电量报警默认开启
+    //       ESP_LOGE(TAG, "电量过低，请及时充电");
+    //       buzzer(3, SHORT_BEEP_DURATION, SHORT_BEEP_INTERVAL);
+    //       lastAlertTime = millis();
+    //     }
+    //   }
+    //   // 根据电量动态调整读取频率，电量越低读取越频繁，最高每秒一次，最低每10秒一次
+    //   float interval = batteryLevel * BATTERY_READING_INTERVAL;
+    //   if (interval > BATTERY_READING_INTERVAL) interval = BATTERY_READING_INTERVAL;
+    //   if (interval < 1000) interval = 1000;
+    //   vTaskDelay(interval / portTICK_PERIOD_MS);
+    // } else {
+    //   vTaskDelay(pdMS_TO_TICKS(1000)); // 充电或充满状态时每秒检查一次状态
+    // }
     taskENTER_CRITICAL(&batteryMux);
     batteryState = getBatteryState();
     taskEXIT_CRITICAL(&batteryMux);
@@ -104,13 +129,7 @@ void batteryCheck(void* pvParameter) {
           lastAlertTime = millis();
         }
       }
-      // 根据电量动态调整读取频率，电量越低读取越频繁，最高每秒一次，最低每10秒一次
-      float interval = batteryLevel * BATTERY_READING_INTERVAL;
-      if (interval > BATTERY_READING_INTERVAL) interval = BATTERY_READING_INTERVAL;
-      if (interval < 1000) interval = 1000;
-      vTaskDelay(interval / portTICK_PERIOD_MS);
-    } else {
-      vTaskDelay(pdMS_TO_TICKS(1000)); // 充电或充满状态时每秒检查一次状态
+      vTaskDelay(pdMS_TO_TICKS(1000));
     }
   }
 }
