@@ -3,8 +3,6 @@
 #include "batReading.h"
 #include "button.h"
 #include <esp_log.h>
-#include <freertos/FreeRTOS.h>
-#include <freertos/task.h>
 
 #define MAX_BRIGHTNESS 255
 #define MIN_BRIGHTNESS 0
@@ -34,9 +32,6 @@ struct LedController {
 static LedController sysRGBCtrl = { LED_STATE_IDLE, 0, 0, 0, 0 };
 static LedController batRGBCtrl = { LED_STATE_IDLE, 0, 0, 0, 0 };
 
-// ===== 互斥锁 =====
-static portMUX_TYPE ledMux = portMUX_INITIALIZER_UNLOCKED;
-
 void ledInit() {
   sysRGB.begin();
   sysRGB.setBrightness(STANDARD_BRIGHTNESS);
@@ -47,27 +42,31 @@ void ledInit() {
 }
 
 uint32_t getBatteryColor(float percent) {
+  // 限制范围
   if (percent < 0) percent = 0;
   if (percent > 100) percent = 100;
 
+  // 定义关键颜色点 (百分比, R, G, B)
   struct ColorPoint {
     float   pct;
     uint8_t r, g, b;
   };
   const ColorPoint points[] = {
-    { 100.0, 0, 0, 255 },
-    { 80.0, 0, 255, 255 },
-    { 60.0, 0, 255, 0 },
-    { 40.0, 255, 255, 0 },
-    { 20.0, 255, 165, 0 },
-    { 10.0, 255, 0, 0 }
+    { 100.0, 0, 0, 255 },  // 蓝
+    { 80.0, 0, 255, 255 }, // 青
+    { 60.0, 0, 255, 0 },   // 绿
+    { 40.0, 255, 255, 0 }, // 黄
+    { 20.0, 255, 165, 0 }, // 橙
+    { 10.0, 255, 0, 0 }    // 红
   };
   const int numPoints = sizeof(points) / sizeof(points[0]);
 
+  // 低于最低点（10%）直接返回红色
   if (percent <= points[numPoints - 1].pct) {
     return (0xFF << 16) | (0x00 << 8) | 0x00;
   }
 
+  // 查找所在区间并线性插值
   for (int i = 0; i < numPoints - 1; i++) {
     if (percent >= points[i + 1].pct && percent <= points[i].pct) {
       float   t = (percent - points[i + 1].pct) / (points[i].pct - points[i + 1].pct);
@@ -77,13 +76,15 @@ uint32_t getBatteryColor(float percent) {
       return ((uint32_t)r << 16) | ((uint32_t)g << 8) | b;
     }
   }
-  return COLOR_OFF;
+  return COLOR_OFF; // fallback
 }
 
+/**
+ * @brief 设置LED模式（非阻塞）
+ */
 void ledSetMode(Adafruit_NeoPixel& myRGB, enum LEDMode mode, uint32_t color, uint16_t duration, uint16_t interval) {
   LedController* ctrl = (&myRGB == &sysRGB) ? &sysRGBCtrl : &batRGBCtrl;
 
-  taskENTER_CRITICAL(&ledMux);
   ctrl->color    = color;
   ctrl->duration = duration;
   ctrl->interval = interval;
@@ -114,83 +115,64 @@ void ledSetMode(Adafruit_NeoPixel& myRGB, enum LEDMode mode, uint32_t color, uin
     ctrl->state = LED_STATE_IDLE;
     break;
   }
-  taskEXIT_CRITICAL(&ledMux);
 }
 
+/**
+ * @brief LED状态机更新函数（非阻塞）
+ */
 void ledUpdate(void* pvParameter) {
   while (1) {
     // 更新系统LED
-    taskENTER_CRITICAL(&ledMux);
     LedController* sysCtrl        = &sysRGBCtrl;
     uint32_t       sysElapsedTime = millis() - sysCtrl->stateStartTime;
-    LedState       sysState       = sysCtrl->state;
-    uint16_t       sysDur         = sysCtrl->duration;
-    uint16_t       sysInt         = sysCtrl->interval;
-    uint32_t       sysColor       = sysCtrl->color;
-    taskEXIT_CRITICAL(&ledMux);
 
-    switch (sysState) {
+    switch (sysCtrl->state) {
     case LED_STATE_BLINK_ON:
-      if (sysElapsedTime >= sysDur) {
+      if (sysElapsedTime >= sysCtrl->duration) {
         sysRGB.clear();
         sysRGB.show();
-        taskENTER_CRITICAL(&ledMux);
         sysCtrl->state          = LED_STATE_BLINK_OFF;
         sysCtrl->stateStartTime = millis();
-        taskEXIT_CRITICAL(&ledMux);
       }
       break;
     case LED_STATE_BLINK_OFF:
-      if (sysElapsedTime >= sysInt) {
+      if (sysElapsedTime >= sysCtrl->interval) {
         sysRGB.clear();
-        sysRGB.setPixelColor(0, sysColor);
+        sysRGB.setPixelColor(0, sysCtrl->color);
         sysRGB.show();
-        taskENTER_CRITICAL(&ledMux);
         sysCtrl->state          = LED_STATE_BLINK_ON;
         sysCtrl->stateStartTime = millis();
-        taskEXIT_CRITICAL(&ledMux);
       }
       break;
+
     default:
       break;
     }
-
     // 更新电池LED
-    taskENTER_CRITICAL(&ledMux);
     LedController* batCtrl        = &batRGBCtrl;
     uint32_t       batElapsedTime = millis() - batCtrl->stateStartTime;
-    LedState       batState       = batCtrl->state;
-    uint16_t       batDur         = batCtrl->duration;
-    uint16_t       batInt         = batCtrl->interval;
-    uint32_t       batColor       = batCtrl->color;
-    taskEXIT_CRITICAL(&ledMux);
 
-    switch (batState) {
+    switch (batCtrl->state) {
     case LED_STATE_BLINK_ON:
-      if (batElapsedTime >= batDur) {
+      if (batElapsedTime >= batCtrl->duration) {
         batRGB.clear();
         batRGB.show();
-        taskENTER_CRITICAL(&ledMux);
         batCtrl->state          = LED_STATE_BLINK_OFF;
         batCtrl->stateStartTime = millis();
-        taskEXIT_CRITICAL(&ledMux);
       }
       break;
     case LED_STATE_BLINK_OFF:
-      if (batElapsedTime >= batInt) {
+      if (batElapsedTime >= batCtrl->interval) {
         batRGB.clear();
-        batRGB.setPixelColor(0, batColor);
+        batRGB.setPixelColor(0, batCtrl->color);
         batRGB.show();
-        taskENTER_CRITICAL(&ledMux);
         batCtrl->state          = LED_STATE_BLINK_ON;
         batCtrl->stateStartTime = millis();
-        taskEXIT_CRITICAL(&ledMux);
       }
       break;
     default:
       break;
     }
-
     vTaskDelay(pdMS_TO_TICKS(10));
   }
 }
