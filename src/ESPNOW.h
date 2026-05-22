@@ -8,10 +8,14 @@ enum recvFromMotor_e {
   CRUISE_MODE,  // 巡航模式
   STANDBY_MODE, // 待机模式
 };
-extern volatile recvFromMotor_e recv_from_motor;
+struct sendToMotor_t {
+  uint16_t speed;
+  bool     data[6] = { }; // 0、左转，1、右转，2、电推，3、功能，4、正在充电，5、电池已满
+  float    batVoltage, batPercentage, footPadChipTemp;
+};
 
-extern volatile bool isMotorOnline;
-
-void esp_now_setup();
-void connection_state_check(void* pvParameters);
-void sendData(void* pvParameters);
+void            esp_now_setup();
+void            connection_state_check(void* pvParameters);
+void            sendData(void* pvParameters);
+recvFromMotor_e getMotormode();
+sendToMotor_t   getSendToMotorData();

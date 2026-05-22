@@ -10,6 +10,7 @@ volatile bool        isBtnShortPressed = false;
 volatile bool        isBtnLongPressed  = false;
 
 static OneButton functionButton;
+static portMUX_TYPE buttonMux = portMUX_INITIALIZER_UNLOCKED;
 
 static void functionButtonShortPressed() {
   isBtnShortPressed = !isBtnShortPressed;
@@ -35,4 +36,11 @@ void buttonTask(void* pvParameters) {
     functionButton.tick();
     vTaskDelay(pdMS_TO_TICKS(100));
   }
+}
+
+bool getBtnShortPressed() {
+  taskENTER_CRITICAL(&buttonMux);
+  bool state = isBtnShortPressed;
+  taskEXIT_CRITICAL(&buttonMux);
+  return state;
 }

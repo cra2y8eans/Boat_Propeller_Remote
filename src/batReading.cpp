@@ -1,15 +1,14 @@
 #include "batReading.h"
 #include "Filters.h"
+#include "button.h"
 #include "buzzer.h"
 #include "esp_log.h"
-#include <button.h>
+#include "led.h"
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
-#include <led.h>
 
 #define K_OHM 1000
-#define BATTERY_READING_INTERVAL 3 * 60 * 1000 // 采样间隔 3分钟*60秒*1000毫秒
-#define BATTERY_ALERT_INTERVAL 3 * 10 * 1000   // 报警间隔 3分钟*10秒*1000毫秒
+#define BATTERY_ALERT_INTERVAL 3 * 10 * 1000 // 报警间隔 3分钟*10秒*1000毫秒
 
 static const char*   TAG           = "电池";
 static const uint8_t batPin        = 1;
@@ -26,11 +25,6 @@ static const uint8_t chargePin  = 2;            // 充电状态检测引脚，�
 static const uint8_t standbyPin = 8;            // 充满状态检测引脚，需外部上拉
 volatile bool        isCharging, isBatteryFull; // 充电状态和电池满状态标志位
 
-enum BatteryState_e {
-  BATTERY_STATE_IDLE,
-  BATTERY_STATE_CHARGING,
-  BATTERY_STATE_FULL,
-};
 static BatteryState_e batteryState = BATTERY_STATE_IDLE;
 static portMUX_TYPE   batteryMux   = portMUX_INITIALIZER_UNLOCKED;
 
@@ -68,13 +62,15 @@ void IRAM_ATTR fullStateChanged_ISR() {
  * @param     batVoltage: 电压值
  */
 float batteryReading() {
+  taskENTER_CRITICAL(&batteryMux);
   batVoltage    = (batFilter.update(analogReadMilliVolts(batPin))) * (R1 + R2) / R2;
   batPercentage = (batVoltage - VMIN) / (VMAX - VMIN) * 100.f;
   batPercentage = constrain(batPercentage, 0.0f, 100.0f); // 确保不为负数
+  taskEXIT_CRITICAL(&batteryMux);
   return batPercentage / 100.f;
 }
 
-BatteryState_e getBatteryState() {
+static BatteryState_e identifyBatteryState() {
   if (isCharging) {
     return BATTERY_STATE_CHARGING;
   } else if (isBatteryFull) {
@@ -89,7 +85,7 @@ void batteryCheck(void* pvParameter) {
   // 初始状态读取和LED设置
   isCharging    = digitalRead(chargePin) == LOW;
   isBatteryFull = digitalRead(standbyPin) == LOW;
-  batteryState  = getBatteryState();
+  batteryState  = identifyBatteryState();
   if (isCharging) {
     ledSetMode(batRGB, LED_ON, COLOR_RED, 0, 0);
   } else if (isBatteryFull) {
@@ -97,7 +93,7 @@ void batteryCheck(void* pvParameter) {
   }
   while (1) {
     taskENTER_CRITICAL(&batteryMux);
-    batteryState = getBatteryState();
+    batteryState = identifyBatteryState();
     taskEXIT_CRITICAL(&batteryMux);
     // 电池空闲状态
     if (batteryState == BATTERY_STATE_IDLE) {
@@ -113,8 +109,8 @@ void batteryCheck(void* pvParameter) {
           lastAlertTime = millis();
         }
       }
-      vTaskDelay(pdMS_TO_TICKS(1000));
     }
+    vTaskDelay(pdMS_TO_TICKS(1000));
   }
 }
 
@@ -122,7 +118,7 @@ void batteryChargeTask(void* pvParameter) {
   while (1) {
     ulTaskNotifyTake(pdTRUE, portMAX_DELAY); // 等待充电状态改变的通知
     taskENTER_CRITICAL(&batteryMux);
-    batteryState = getBatteryState();
+    batteryState = identifyBatteryState();
     taskEXIT_CRITICAL(&batteryMux);
     switch (batteryState) {
     case BATTERY_STATE_CHARGING: {
@@ -151,4 +147,34 @@ void batteryInit() {
   pinMode(standbyPin, INPUT); // 已外部上拉
   attachInterrupt(digitalPinToInterrupt(chargePin), chargeStateChanged_ISR, CHANGE);
   attachInterrupt(digitalPinToInterrupt(standbyPin), fullStateChanged_ISR, CHANGE);
+}
+
+bool isBatteryCharging() {
+  taskENTER_CRITICAL(&batteryMux);
+  bool charging = isCharging;
+  taskEXIT_CRITICAL(&batteryMux);
+  return charging;
+}
+
+bool isFullyCharged() {
+  taskENTER_CRITICAL(&batteryMux);
+  bool full = isBatteryFull;
+  taskEXIT_CRITICAL(&batteryMux);
+  return full;
+}
+
+float getBatteryLevel() {
+  float level;
+  taskENTER_CRITICAL(&batteryMux);
+  level = batPercentage;
+  taskEXIT_CRITICAL(&batteryMux);
+  return level;
+}
+
+float getBatteryVoltage() {
+  float voltage;
+  taskENTER_CRITICAL(&batteryMux);
+  voltage = batVoltage;
+  taskEXIT_CRITICAL(&batteryMux);
+  return voltage;
 }
