@@ -8,7 +8,8 @@
 #include <freertos/task.h>
 
 #define K_OHM 1000
-#define BATTERY_ALERT_INTERVAL 3 * 10 * 1000 // 报警间隔 3分钟*10秒*1000毫秒
+#define BATTERY_READING_INTERVAL 3 * 60 * 1000 // 采样间隔 3分钟*60秒*1000毫秒
+#define BATTERY_ALERT_INTERVAL 3 * 10 * 1000   // 报警间隔 3分钟*10秒*1000毫秒
 
 static const char*   TAG           = "电池";
 static const uint8_t batPin        = 1;
@@ -72,11 +73,17 @@ float batteryReading() {
 
 static BatteryState_e identifyBatteryState() {
   if (isCharging) {
+    taskENTER_CRITICAL(&batteryMux);
     return BATTERY_STATE_CHARGING;
+    taskEXIT_CRITICAL(&batteryMux);
   } else if (isBatteryFull) {
+    taskENTER_CRITICAL(&batteryMux);
     return BATTERY_STATE_FULL;
+    taskEXIT_CRITICAL(&batteryMux);
   } else {
+    taskENTER_CRITICAL(&batteryMux);
     return BATTERY_STATE_IDLE;
+    taskEXIT_CRITICAL(&batteryMux);
   }
 }
 
@@ -92,9 +99,8 @@ void batteryCheck(void* pvParameter) {
     ledSetMode(batRGB, LED_ON, COLOR_GREEN, 0, 0);
   }
   while (1) {
-    taskENTER_CRITICAL(&batteryMux);
     batteryState = identifyBatteryState();
-    taskEXIT_CRITICAL(&batteryMux);
+
     // 电池空闲状态
     if (batteryState == BATTERY_STATE_IDLE) {
       float    batteryLevel = batteryReading();
@@ -109,17 +115,21 @@ void batteryCheck(void* pvParameter) {
           lastAlertTime = millis();
         }
       }
+      // 根据电量动态调整读取频率，电量越低读取越频繁，最高每秒一次，最低每10秒一次
+      float interval = batteryLevel * BATTERY_READING_INTERVAL;
+      if (interval > BATTERY_READING_INTERVAL) interval = BATTERY_READING_INTERVAL;
+      if (interval < 1000) interval = 1000;
+      vTaskDelay(interval / portTICK_PERIOD_MS);
+    } else {
+      vTaskDelay(pdMS_TO_TICKS(100));
     }
-    vTaskDelay(pdMS_TO_TICKS(1000));
   }
 }
 
 void batteryChargeTask(void* pvParameter) {
   while (1) {
     ulTaskNotifyTake(pdTRUE, portMAX_DELAY); // 等待充电状态改变的通知
-    taskENTER_CRITICAL(&batteryMux);
     batteryState = identifyBatteryState();
-    taskEXIT_CRITICAL(&batteryMux);
     switch (batteryState) {
     case BATTERY_STATE_CHARGING: {
       float batteryLevel = batteryReading();
@@ -133,6 +143,13 @@ void batteryChargeTask(void* pvParameter) {
       ledSetMode(batRGB, LED_ON, COLOR_GREEN, 0, 0); // 充满，亮绿灯
       buzzer(3, SHORT_BEEP_DURATION, SHORT_BEEP_INTERVAL);
       ESP_LOGI(TAG, "电池已充满，电量: %.2f%%, 电压: %.2fV", batPercentage, batVoltage);
+      break;
+    }
+    case BATTERY_STATE_IDLE: {
+      float    batteryLevel = batteryReading();
+      uint32_t color        = getBatteryColor(batPercentage);
+      ledSetMode(batRGB, LED_ON, color, 0, 0); // 空闲状态根据电量显示颜色
+      ESP_LOGI(TAG, "电池空闲，电量: %.2f%%, 电压: %.2fV", batPercentage, batVoltage);
       break;
     }
     default:
