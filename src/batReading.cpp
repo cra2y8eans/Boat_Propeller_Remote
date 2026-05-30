@@ -72,19 +72,17 @@ float batteryReading() {
 }
 
 static BatteryState_e identifyBatteryState() {
+  taskENTER_CRITICAL(&batteryMux);
+  BatteryState_e state;
   if (isCharging) {
-    taskENTER_CRITICAL(&batteryMux);
-    return BATTERY_STATE_CHARGING;
-    taskEXIT_CRITICAL(&batteryMux);
+    state = BATTERY_STATE_CHARGING;
   } else if (isBatteryFull) {
-    taskENTER_CRITICAL(&batteryMux);
-    return BATTERY_STATE_FULL;
-    taskEXIT_CRITICAL(&batteryMux);
+    state = BATTERY_STATE_FULL;
   } else {
-    taskENTER_CRITICAL(&batteryMux);
-    return BATTERY_STATE_IDLE;
-    taskEXIT_CRITICAL(&batteryMux);
+    state = BATTERY_STATE_IDLE;
   }
+  taskEXIT_CRITICAL(&batteryMux);
+  return state;
 }
 
 //  电量读取任务

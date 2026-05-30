@@ -21,9 +21,9 @@ static esp_now_peer_info_t Remote;
 static const char*            TAG               = "ESPNOW";
 static const uint8_t          motorMacAddr[6]   = { 0xd8, 0x85, 0xac, 0xa0, 0x49, 0xd8 };
 static const uint8_t          speedPin          = 0;
-static const uint8_t          turnRightPin      = 5;
-static const uint8_t          turnLeftPin       = 6;
-static const uint8_t          throttlePin       = 3;
+static const uint8_t          turnRightPin      = 7;
+static const uint8_t          turnLeftPin       = 3;
+static const uint8_t          throttlePin       = 5;
 static volatile unsigned long lastRecvFromMotor = 0;
 volatile bool                 isMotorOnline     = false;
 
@@ -80,7 +80,7 @@ void connection_state_check(void* pvParameters) {
         buzzer(3, SHORT_BEEP_DURATION, SHORT_BEEP_INTERVAL);
         ESP_LOGE(TAG, "掉线！请检查网络连接！");
       } else {
-        ledSetMode(sysRGB, LED_ON, COLOR_GREEN, 0, 0);
+        ledSetMode(sysRGB, LED_ON, COLOR_BLUE, 0, 0);
         ESP_LOGI(TAG, "已连接");
       }
     }
