@@ -6,7 +6,7 @@
 #define LONG_PRESS_DEBOUNCE_MS 800
 static const char*   TAG               = "按钮";
 static const uint8_t functionButtonPin = 6;
-volatile bool        isBtnShortPressed = false;
+volatile bool        isBtnShortPressed = false;  // false，电推sysRGB亮蓝灯
 volatile bool        isBtnLongPressed  = false;
 
 static OneButton functionButton;
